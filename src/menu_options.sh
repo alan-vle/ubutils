@@ -47,7 +47,6 @@ promptSshHost() {
         return
     fi
     
-    # Try fzf first
     if command -v fzf &> /dev/null; then
         result=$(printf "%s\n" "${hosts[@]}" | fzf --prompt="$prompt" --height=40% --border)
         if [[ -n "$result" ]]; then
@@ -56,7 +55,6 @@ promptSshHost() {
         fi
     fi
     
-    # Fallback: numbered list
     echo ""
     printInfo "Hosts SSH disponibles :"
     local i=1
@@ -98,228 +96,227 @@ promptWithCompletion() {
     eval "$varname='$result'"
 }
 
-# Show SCP explanation and usage
+# Show SCP
 showScpInfo() {
     echo ""
     printInfo "SCP (Secure Copy Protocol)"
     echo ""
     
-    local file sourceUser sourceHost sourcePath destUser destHost destPath
-    local isRemoteSource isRemoteDest sourceType destType
+    local transferType source dest
+    local host user path localPath
     
-    # Prompt for file with completion
-    while [[ -z "$file" ]]; do
-        promptWithCompletion "Fichier/dossier local : " file
-    done
-    
-    # Source type
-    echo -ne "${COLOR_INFO}Source distante ? (o/n) : ${COLOR_RESET}"
-    read -n 1 isRemoteSource
+    echo "1) Local → Distant"
+    echo "2) Distant → Local"
+    echo "3) Distant → Distant"
+    echo ""
+    echo -ne "${COLOR_INFO}Type de transfert : ${COLOR_RESET}"
+    read transferType
     echo ""
     
-    if [[ "${isRemoteSource,,}" == "o" ]]; then
-        echo -ne "${COLOR_INFO}Source - [M]anuel ou [S]SH config ? (m/s) : ${COLOR_RESET}"
-        read -n 1 sourceType
+    if [[ "$transferType" == "1" ]]; then
+        promptWithCompletion "Fichier local : " localPath
+        
+        echo -ne "${COLOR_INFO}[M]anuel ou [S]SH ? ${COLOR_RESET}"
+        read sshType
         echo ""
         
-        if [[ "${sourceType,,}" == "s" ]]; then
-            while [[ -z "$sourceHost" ]]; do
-                promptSshHost "Source - SSH config ID : " sourceHost
-            done
+        if [[ "${sshType,,}" == "s" ]]; then
+            promptSshHost "Host : " host
         else
-            while [[ -z "$sourceUser" ]]; do
-                promptWithCompletion "Source - User : " sourceUser
-            done
-            
-            while [[ -z "$sourceHost" ]]; do
-                promptWithCompletion "Source - Host : " sourceHost
-            done
-            
-            sourceHost="${sourceUser}@${sourceHost}"
+            promptWithCompletion "User : " user
+            promptWithCompletion "Host : " host
+            host="${user}@${host}"
         fi
         
-        while [[ -z "$sourcePath" ]]; do
-            promptWithCompletion "Source - Chemin : " sourcePath
-        done
+        promptWithCompletion "Chemin distant : " path
         
-        source="${sourceHost}:${sourcePath}"
-    else
-        source="$file"
-    fi
-    
-    # Destination type
-    echo -ne "${COLOR_INFO}Destination distante ? (o/n) : ${COLOR_RESET}"
-    read -n 1 isRemoteDest
-    echo ""
-    
-    if [[ "${isRemoteDest,,}" == "o" ]]; then
-        echo -ne "${COLOR_INFO}Destination - [M]anuel ou [S]SH config ? (m/s) : ${COLOR_RESET}"
-        read -n 1 destType
+        source="$localPath"
+        dest="${host}:${path}"
+        
+    elif [[ "$transferType" == "2" ]]; then
+        echo -ne "${COLOR_INFO}[M]anuel ou [S]SH ? ${COLOR_RESET}"
+        read -n 1 sshType
         echo ""
         
-        if [[ "${destType,,}" == "s" ]]; then
-            while [[ -z "$destHost" ]]; do
-                promptSshHost "Destination - SSH config ID : " destHost
-            done
+        if [[ "${sshType,,}" == "s" ]]; then
+            promptSshHost "Host : " host
         else
-            while [[ -z "$destUser" ]]; do
-                promptWithCompletion "Destination - User : " destUser
-            done
-            
-            while [[ -z "$destHost" ]]; do
-                promptWithCompletion "Destination - Host : " destHost
-            done
-            
-            destHost="${destUser}@${destHost}"
+            promptWithCompletion "User : " user
+            promptWithCompletion "Host : " host
+            host="${user}@${host}"
         fi
         
-        while [[ -z "$destPath" ]]; do
-            promptWithCompletion "Destination - Chemin : " destPath
-        done
+        promptWithCompletion "Chemin distant : " path
+        promptWithCompletion "Destination locale : " localPath
         
-        destination="${destHost}:${destPath}"
+        source="${host}:${path}"
+        dest="$localPath"
+        
     else
-        while [[ -z "$destPath" ]]; do
-            promptWithCompletion "Destination locale : " destPath
-        done
-        destination="$destPath"
+        printInfo "SOURCE"
+        echo -ne "${COLOR_INFO}[M]anuel ou [S]SH ? ${COLOR_RESET}"
+        read -n 1 sshType
+        echo ""
+        
+        if [[ "${sshType,,}" == "s" ]]; then
+            promptSshHost "Host : " host
+        else
+            promptWithCompletion "User : " user
+            promptWithCompletion "Host : " host
+            host="${user}@${host}"
+        fi
+        
+        promptWithCompletion "Chemin : " path
+        source="${host}:${path}"
+        
+        host=""
+        user=""
+        path=""
+        
+        echo ""
+        printInfo "DESTINATION"
+        echo -ne "${COLOR_INFO}[M]anuel ou [S]SH ? ${COLOR_RESET}"
+        read -n 1 sshType
+        echo ""
+        
+        if [[ "${sshType,,}" == "s" ]]; then
+            promptSshHost "Host : " host
+        else
+            promptWithCompletion "User : " user
+            promptWithCompletion "Host : " host
+            host="${user}@${host}"
+        fi
+        
+        promptWithCompletion "Chemin : " path
+        dest="${host}:${path}"
     fi
     
-    # Generate command
-    local cmd="scp"
-    if [[ -d "$file" ]]; then
-        cmd="$cmd -r"
-    fi
-    cmd="$cmd $source $destination"
+    local cmd="scp -r $source $dest"
     
     echo ""
     printSuccess "Commande générée :"
     echo -e "  ${COLOR_MENU}$cmd${COLOR_RESET}"
     echo ""
     
-    # Ask to execute
-    echo -ne "${COLOR_INFO}Exécuter la commande ? (o/n) : ${COLOR_RESET}"
+    echo -ne "${COLOR_INFO}Exécuter ? (o/n) : ${COLOR_RESET}"
     read -n 1 execute
     echo ""
     
     if [[ "${execute,,}" == "o" ]]; then
         echo ""
-        printInfo "Exécution en cours..."
+        printInfo "Exécution..."
         eval "$cmd"
-        local exitCode=$?
-        
-        if [[ $exitCode -eq 0 ]]; then
-            printSuccess "Transfert terminé avec succès"
-        else
-            printError "Erreur lors du transfert (code: $exitCode)"
-        fi
+        [[ $? -eq 0 ]] && printSuccess "Terminé" || printError "Erreur"
     fi
     
     showSubMenu
 }
 
-# Show Rsync explanation and usage
+# Show Rsync
 showRsyncInfo() {
     echo ""
     printInfo "Rsync (Remote Sync)"
     echo ""
     
     local source dest syncMode deleteFiles showProgress
-    local sourceUser sourceHost sourcePath destUser destHost destPath
-    local isRemoteSource isRemoteDest sourceType destType
+    local host user path localPath
     
-    # Sync mode
-    echo -ne "${COLOR_INFO}Mode : [1] Synchroniser | [2] Backup : ${COLOR_RESET}"
-    read -n 1 syncMode
-    echo ""
-    
-    # Options
-    echo -ne "${COLOR_INFO}Afficher la progression ? (o/n) : ${COLOR_RESET}"
+    echo -ne "${COLOR_INFO}Afficher progression ? (o/n) : ${COLOR_RESET}"
     read -n 1 showProgress
     echo ""
     
-    echo -ne "${COLOR_INFO}Supprimer fichiers absents de la source ? (o/n) : ${COLOR_RESET}"
+    echo -ne "${COLOR_INFO}Supprimer fichiers absents ? (o/n) : ${COLOR_RESET}"
     read -n 1 deleteFiles
     echo ""
     
-    # Source
-    while [[ -z "$source" ]]; do
-        promptWithCompletion "Source (fichier/dossier) : " source
-    done
-    
-    echo -ne "${COLOR_INFO}Source distante ? (o/n) : ${COLOR_RESET}"
-    read -n 1 isRemoteSource
+    echo "1) Local → Distant"
+    echo "2) Distant → Local"
+    echo "3) Distant → Distant"
+    echo ""
+    echo -ne "${COLOR_INFO}Type : ${COLOR_RESET}"
+    read -n 1 transferType
+    echo ""
     echo ""
     
-    if [[ "${isRemoteSource,,}" == "o" ]]; then
-        echo -ne "${COLOR_INFO}Source - [M]anuel ou [S]SH config ? (m/s) : ${COLOR_RESET}"
-        read -n 1 sourceType
+    if [[ "$transferType" == "1" ]]; then
+        promptWithCompletion "Source locale : " source
+        
+        echo -ne "${COLOR_INFO}[M]anuel ou [S]SH ? ${COLOR_RESET}"
+        read -n 1 sshType
         echo ""
         
-        if [[ "${sourceType,,}" == "s" ]]; then
-            promptSshHost "Source - SSH config ID : " sourceHost
+        if [[ "${sshType,,}" == "s" ]]; then
+            promptSshHost "Host : " host
         else
-            while [[ -z "$sourceUser" ]]; do
-                promptWithCompletion "Source - User : " sourceUser
-            done
-            while [[ -z "$sourceHost" ]]; do
-                promptWithCompletion "Source - Host : " sourceHost
-            done
-            sourceHost="${sourceUser}@${sourceHost}"
+            promptWithCompletion "User : " user
+            promptWithCompletion "Host : " host
+            host="${user}@${host}"
         fi
         
-        while [[ -z "$sourcePath" ]]; do
-            promptWithCompletion "Source - Chemin : " sourcePath
-        done
+        promptWithCompletion "Chemin distant : " path
+        dest="${host}:${path}"
         
-        source="${sourceHost}:${sourcePath}"
-    fi
-    
-    # Destination
-    echo -ne "${COLOR_INFO}Destination distante ? (o/n) : ${COLOR_RESET}"
-    read -n 1 isRemoteDest
-    echo ""
-    
-    if [[ "${isRemoteDest,,}" == "o" ]]; then
-        echo -ne "${COLOR_INFO}Destination - [M]anuel ou [S]SH config ? (m/s) : ${COLOR_RESET}"
-        read -n 1 destType
+    elif [[ "$transferType" == "2" ]]; then
+        echo -ne "${COLOR_INFO}[M]anuel ou [S]SH ? ${COLOR_RESET}"
+        read -n 1 sshType
         echo ""
         
-        if [[ "${destType,,}" == "s" ]]; then
-            promptSshHost "Destination - SSH config ID : " destHost
+        if [[ "${sshType,,}" == "s" ]]; then
+            promptSshHost "Host : " host
         else
-            while [[ -z "$destUser" ]]; do
-                promptWithCompletion "Destination - User : " destUser
-            done
-            while [[ -z "$destHost" ]]; do
-                promptWithCompletion "Destination - Host : " destHost
-            done
-            destHost="${destUser}@${destHost}"
+            promptWithCompletion "User : " user
+            promptWithCompletion "Host : " host
+            host="${user}@${host}"
         fi
         
-        while [[ -z "$destPath" ]]; do
-            promptWithCompletion "Destination - Chemin : " destPath
-        done
+        promptWithCompletion "Chemin distant : " path
+        promptWithCompletion "Destination locale : " localPath
         
-        dest="${destHost}:${destPath}"
+        source="${host}:${path}"
+        dest="$localPath"
+        
     else
-        while [[ -z "$destPath" ]]; do
-            promptWithCompletion "Destination locale : " destPath
-        done
-        dest="$destPath"
+        printInfo "SOURCE"
+        echo -ne "${COLOR_INFO}[M]anuel ou [S]SH ? ${COLOR_RESET}"
+        read -n 1 sshType
+        echo ""
+        
+        if [[ "${sshType,,}" == "s" ]]; then
+            promptSshHost "Host : " host
+        else
+            promptWithCompletion "User : " user
+            promptWithCompletion "Host : " host
+            host="${user}@${host}"
+        fi
+        
+        promptWithCompletion "Chemin : " path
+        source="${host}:${path}"
+        
+        host=""
+        user=""
+        path=""
+        
+        echo ""
+        printInfo "DESTINATION"
+        echo -ne "${COLOR_INFO}[M]anuel ou [S]SH ? ${COLOR_RESET}"
+        read -n 1 sshType
+        echo ""
+        
+        if [[ "${sshType,,}" == "s" ]]; then
+            promptSshHost "Host : " host
+        else
+            promptWithCompletion "User : " user
+            promptWithCompletion "Host : " host
+            host="${user}@${host}"
+        fi
+        
+        promptWithCompletion "Chemin : " path
+        dest="${host}:${path}"
     fi
     
-    # Generate command
     local cmd="rsync -avz"
-    
-    if [[ "${showProgress,,}" == "o" ]]; then
-        cmd="$cmd --progress"
-    fi
-    
-    if [[ "${deleteFiles,,}" == "o" ]]; then
-        cmd="$cmd --delete"
-    fi
-    
+    [[ "${showProgress,,}" == "o" ]] && cmd="$cmd --progress"
+    [[ "${deleteFiles,,}" == "o" ]] && cmd="$cmd --delete"
     cmd="$cmd $source $dest"
     
     echo ""
@@ -327,22 +324,15 @@ showRsyncInfo() {
     echo -e "  ${COLOR_MENU}$cmd${COLOR_RESET}"
     echo ""
     
-    # Ask to execute
-    echo -ne "${COLOR_INFO}Exécuter la commande ? (o/n) : ${COLOR_RESET}"
+    echo -ne "${COLOR_INFO}Exécuter ? (o/n) : ${COLOR_RESET}"
     read -n 1 execute
     echo ""
     
     if [[ "${execute,,}" == "o" ]]; then
         echo ""
-        printInfo "Exécution en cours..."
+        printInfo "Exécution..."
         eval "$cmd"
-        local exitCode=$?
-        
-        if [[ $exitCode -eq 0 ]]; then
-            printSuccess "Synchronisation terminée avec succès"
-        else
-            printError "Erreur lors de la synchronisation (code: $exitCode)"
-        fi
+        [[ $? -eq 0 ]] && printSuccess "Terminé" || printError "Erreur"
     fi
     
     showSubMenu
