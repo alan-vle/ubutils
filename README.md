@@ -207,4 +207,4 @@ MIT
 
 ## Auteur
 
-Votre nom
+@Alan V
